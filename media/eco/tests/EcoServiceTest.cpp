@@ -20,9 +20,9 @@
 #define LOG_TAG "ECOServiceTest"
 
 #include <android-base/unique_fd.h>
-#include <android/binder_auto_utils.h>
-#include <android/binder_manager.h>
-#include <android/binder_parcel.h>
+#include <binder/Parcel.h>
+#include <binder/Parcelable.h>
+#include <binder/IServiceManager.h>
 #include <cutils/ashmem.h>
 #include <gtest/gtest.h>
 #include <math.h>
@@ -40,7 +40,9 @@ namespace android {
 namespace media {
 namespace eco {
 
-using ::ndk::ScopedAStatus;
+using ::android::IBinder;
+using android::sp;
+using ::android::binder::Status;
 
 namespace {
 
@@ -56,101 +58,106 @@ class EcoServiceTest : public ::testing::Test {
 public:
     EcoServiceTest() { ALOGD("EcoServiceTest created"); }
 
-    std::shared_ptr<IECOService> createService() {
-        mECOService = IECOService::fromBinder(
-                ndk::SpAIBinder(AServiceManager_waitForService("media.ecoservice")));
-        if (mECOService == nullptr) {
+    sp<IECOService> createService() {
+        android::sp<android::IServiceManager> sm = android::defaultServiceManager();
+        assert(sm != 0);
+        android::sp<android::IBinder> binder = sm->getService(String16("media.ecoservice"));
+
+        if (binder == 0) {
             ALOGE("Failed to connect to ecoservice");
             return nullptr;
+        } else {
+            ALOGD("Successfully connect to ecoservice");
         }
 
+        mECOService = android::interface_cast<IECOService>(binder);
         return mECOService;
     }
 
     ~EcoServiceTest() { ALOGD("EcoServiceTest destroyed"); }
 
 private:
-    std::shared_ptr<IECOService> mECOService = nullptr;
+    sp<IECOService> mECOService = nullptr;
 };
 
 TEST_F(EcoServiceTest, NormalObtainSessionWithInvalidWidth) {
-    std::shared_ptr<IECOService> service = createService();
+    sp<IECOService> service = createService();
     EXPECT_TRUE(service != nullptr);
 
     // Provider obtains the session from the service.
-    std::shared_ptr<IECOSession> session = nullptr;
+    sp<IECOSession> session = nullptr;
 
     service->obtainSession(-1 /* width */, kTestHeight, kIsCameraRecording, &session);
     EXPECT_FALSE(session);
 }
 
 TEST_F(EcoServiceTest, NormalObtainSessionWithInvalidHeight) {
-    std::shared_ptr<IECOService> service = createService();
+    sp<IECOService> service = createService();
 
     // Provider obtains the session from the service.
-    std::shared_ptr<IECOSession> session = nullptr;
+    sp<IECOSession> session = nullptr;
 
     service->obtainSession(kTestWidth, -1 /* height */, kIsCameraRecording, &session);
     EXPECT_FALSE(session);
 }
 
 TEST_F(EcoServiceTest, NormalObtainSessionWithCameraRecordingFalse) {
-    std::shared_ptr<IECOService> service = createService();
+    sp<IECOService> service = createService();
 
     // Provider obtains the session from the service.
-    std::shared_ptr<IECOSession> session = nullptr;
+    sp<IECOSession> session = nullptr;
 
     service->obtainSession(kTestWidth, kTestHeight, false /* isCameraRecording */, &session);
     EXPECT_TRUE(session);
 }
 
 TEST_F(EcoServiceTest, NormalObtainSingleSession) {
-    std::shared_ptr<IECOService> service = createService();
+    sp<IECOService> service = createService();
     EXPECT_TRUE(service != nullptr);
 
     // Provider obtains the session from the service.
-    std::shared_ptr<IECOSession> session = nullptr;
+    sp<IECOSession> session = nullptr;
 
     service->obtainSession(kTestWidth, kTestHeight, kIsCameraRecording, &session);
     EXPECT_TRUE(session);
 }
 
 TEST_F(EcoServiceTest, NormalObtainSessionTwice) {
-    std::shared_ptr<IECOService> service = createService();
+    sp<IECOService> service = createService();
     EXPECT_TRUE(service != nullptr);
 
     // Provider obtains the session from the service.
-    std::shared_ptr<IECOSession> session1 = nullptr;
+    sp<IECOSession> session1 = nullptr;
 
     service->obtainSession(kTestWidth, kTestHeight, kIsCameraRecording, &session1);
     EXPECT_TRUE(session1);
 
-    std::shared_ptr<IECOSession> session2 = nullptr;
+    sp<IECOSession> session2 = nullptr;
 
     service->obtainSession(kTestWidth, kTestHeight, kIsCameraRecording, &session2);
     EXPECT_TRUE(session2);
 
     // The two session instances should be the same.
-    EXPECT_TRUE(session1->asBinder() == session2->asBinder());
+    EXPECT_TRUE(IInterface::asBinder(session1) == IInterface::asBinder(session2));
 }
 
 TEST_F(EcoServiceTest, ObtainTwoSessions) {
-    std::shared_ptr<IECOService> service = createService();
+    sp<IECOService> service = createService();
     EXPECT_TRUE(service != nullptr);
 
     // Provider obtains the session from the service.
-    std::shared_ptr<IECOSession> session1 = nullptr;
+    sp<IECOSession> session1 = nullptr;
 
     service->obtainSession(kTestWidth, kTestHeight, kIsCameraRecording, &session1);
     EXPECT_TRUE(session1);
 
-    std::shared_ptr<IECOSession> session2 = nullptr;
+    sp<IECOSession> session2 = nullptr;
 
     service->obtainSession(kTestWidth - 1, kTestHeight - 1, kIsCameraRecording, &session2);
     EXPECT_TRUE(session2);
 
     // The two session instances must not be the same.
-    EXPECT_TRUE(session1->asBinder() != session2->asBinder());
+    EXPECT_TRUE(IInterface::asBinder(session1) != IInterface::asBinder(session2));
 
     // Check the session number.
     int32_t count = 0;
@@ -158,16 +165,16 @@ TEST_F(EcoServiceTest, ObtainTwoSessions) {
     EXPECT_EQ(count, 2);
 
     // Get the list of sessions from service.
-    std::vector<::ndk::SpAIBinder> sessionList;
+    std::vector<sp<IBinder>> sessionList;
     service->getSessions(&sessionList);
     bool foundFirstSession = false, foundSecondSession = false;
 
-    for (std::vector<::ndk::SpAIBinder>::iterator it = sessionList.begin(); it != sessionList.end();
+    for (std::vector<sp<IBinder>>::iterator it = sessionList.begin(); it != sessionList.end();
          ++it) {
-        if (session1->asBinder() == it->get()) {
+        if (IInterface::asBinder(session1) == it->get()) {
             foundFirstSession = true;
         }
-        if (session2->asBinder() == it->get()) {
+        if (IInterface::asBinder(session2) == it->get()) {
             foundSecondSession = true;
         }
     }
@@ -178,19 +185,18 @@ TEST_F(EcoServiceTest, ObtainTwoSessions) {
 }
 
 TEST_F(EcoServiceTest, TestNormalFlowWithOneListenerAndOneProvider) {
-    std::shared_ptr<IECOService> service = createService();
+    sp<IECOService> service = createService();
     EXPECT_TRUE(service != nullptr);
 
     // Provider obtains the session from the service.
-    std::shared_ptr<IECOSession> session = nullptr;
+    sp<IECOSession> session = nullptr;
 
     service->obtainSession(kTestWidth, kTestHeight, kIsCameraRecording, &session);
     EXPECT_TRUE(session);
 
     // Create provider and add it to the session.
-    std::shared_ptr<FakeECOServiceStatsProvider> fakeProvider =
-            ndk::SharedRefBase::make<FakeECOServiceStatsProvider>(kTestWidth, kTestHeight,
-                                                                  kIsCameraRecording, kFrameRate);
+    sp<FakeECOServiceStatsProvider> fakeProvider = new FakeECOServiceStatsProvider(
+            kTestWidth, kTestHeight, kIsCameraRecording, kFrameRate);
     fakeProvider->setECOSession(session);
 
     ECOData providerConfig(ECOData::DATA_TYPE_STATS_PROVIDER_CONFIG,
@@ -199,12 +205,11 @@ TEST_F(EcoServiceTest, TestNormalFlowWithOneListenerAndOneProvider) {
     providerConfig.setInt32(KEY_PROVIDER_TYPE,
                             ECOServiceStatsProvider::STATS_PROVIDER_TYPE_VIDEO_ENCODER);
     bool res;
-    ScopedAStatus status = session->addStatsProvider(fakeProvider, providerConfig, &res);
+    Status status = session->addStatsProvider(fakeProvider, providerConfig, &res);
 
     // Create listener and add it to the session.
-    std::shared_ptr<FakeECOServiceInfoListener> fakeListener =
-            ndk::SharedRefBase::make<FakeECOServiceInfoListener>(kTestWidth, kTestHeight,
-                                                                 kIsCameraRecording);
+    sp<FakeECOServiceInfoListener> fakeListener =
+            new FakeECOServiceInfoListener(kTestWidth, kTestHeight, kIsCameraRecording);
     fakeListener->setECOSession(session);
 
     // Create the listener config.

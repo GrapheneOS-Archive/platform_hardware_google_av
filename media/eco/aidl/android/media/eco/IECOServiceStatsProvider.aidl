@@ -16,6 +16,7 @@
 
 package android.media.eco;
 
+import android.os.IBinder;
 
 /**
 * An interface for providers that provides various statistics to ECO service.

@@ -17,10 +17,8 @@
 #ifndef ANDROID_MEDIA_ECO_SERVICE_H_
 #define ANDROID_MEDIA_ECO_SERVICE_H_
 
-#include <aidl/android/media/eco/BnECOService.h>
-#include <android/binder_manager.h>
-#include <android/binder_process.h>
-#include <utils/Log.h>
+#include <android/media/eco/BnECOService.h>
+#include <binder/IServiceManager.h>
 #include <utils/Mutex.h>
 
 #include <list>
@@ -32,11 +30,9 @@ namespace android {
 namespace media {
 namespace eco {
 
-using aidl::android::media::eco::BnECOService;
-using aidl::android::media::eco::ECOData;
-using aidl::android::media::eco::ECODataStatus;
+using android::sp;
+using android::binder::Status;
 using android::media::eco::ECOSession;
-using ndk::ScopedAStatus;
 
 /**
  * ECO (Encoder Camera Optimization) service.
@@ -54,36 +50,36 @@ using ndk::ScopedAStatus;
  * ECOServiceStatsProvider and ECOServiceInfoListener should remove themselves from ECOSession.
  * Then ECOService will safely destroy the ECOSession.
  */
-class ECOService : public BnECOService {
-    using ::ndk::ICInterface::dump;
+class ECOService : public BnECOService,
+                   public virtual IBinder::DeathRecipient {
 
 public:
     ECOService();
 
     virtual ~ECOService() = default;
 
-    virtual ScopedAStatus obtainSession(int32_t width, int32_t height, bool isCameraRecording,
-                                        std::shared_ptr<IECOSession>* _aidl_return);
+    virtual Status obtainSession(int32_t width, int32_t height, bool isCameraRecording,
+                                 sp<IECOSession>* _aidl_return);
 
-    virtual ScopedAStatus getNumOfSessions(int32_t* _aidl_return);
+    virtual Status getNumOfSessions(int32_t* _aidl_return);
 
-    virtual ScopedAStatus getSessions(std::vector<::ndk::SpAIBinder>* _aidl_return);
+    virtual Status getSessions(::std::vector<sp<IBinder>>* _aidl_return);
 
     static status_t instantiate() {
-        std::shared_ptr<ECOService> service = ::ndk::SharedRefBase::make<ECOService>();
-        binder_status_t status =
-                AServiceManager_addService(service->asBinder().get(), getServiceName());
-        ABinderProcess_startThreadPool();
-        return (status == EX_NONE) ? STATUS_OK : STATUS_UNKNOWN_ERROR;
+        bool allowIsolated = false;
+        int dumpFlags = IServiceManager::DUMP_FLAG_PRIORITY_DEFAULT;
+        sp<IServiceManager> sm(defaultServiceManager());
+        return sm->addService(String16(getServiceName()), new ECOService(), allowIsolated,
+                              dumpFlags);
     }
 
     // Implementation of BinderService<T>
     static char const* getServiceName() { return "media.ecoservice"; }
 
     // IBinder::DeathRecipient implementation
-    virtual void binderDied(const std::weak_ptr<AIBinder>& who);
+    virtual void binderDied(const wp<IBinder>& who);
 
-    virtual status_t dump(int fd, const std::vector<std::string>& args);
+    virtual status_t dump(int fd, const Vector<String16>& args);
 
 private:
     // Lock guarding ECO service state
@@ -118,11 +114,10 @@ private:
     };
 
     // Map from SessionConfig to session.
-    std::unordered_map<SessionConfig, std::weak_ptr<ECOSession>, SessionConfigHash>
-            mSessionConfigToSessionMap;
+    std::unordered_map<SessionConfig, wp<ECOSession>, SessionConfigHash> mSessionConfigToSessionMap;
 
-    using MapIterType = std::unordered_map<SessionConfig, std::weak_ptr<ECOSession>,
-                                           SessionConfigHash>::iterator;
+    using MapIterType =
+            std::unordered_map<SessionConfig, wp<ECOSession>, SessionConfigHash>::iterator;
 
     // A helpful function to traverse the mSessionConfigToSessionMap, remove the entry that
     // does not exist any more and call |callback| when the entry is valid.
