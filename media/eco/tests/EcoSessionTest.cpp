@@ -20,8 +20,8 @@
 #define LOG_TAG "ECOSessionTest"
 
 #include <android-base/unique_fd.h>
-#include <android/binder_auto_utils.h>
-#include <android/binder_parcel.h>
+#include <binder/Parcel.h>
+#include <binder/Parcelable.h>
 #include <cutils/ashmem.h>
 #include <gtest/gtest.h>
 #include <math.h>
@@ -39,7 +39,8 @@ namespace android {
 namespace media {
 namespace eco {
 
-using ::ndk::ScopedAStatus;
+using android::sp;
+using ::android::binder::Status;
 
 static constexpr uint32_t kTestWidth = 1280;
 static constexpr uint32_t kTestHeight = 720;
@@ -53,15 +54,14 @@ class EcoSessionTest : public ::testing::Test {
 public:
     EcoSessionTest() { ALOGD("EcoSessionTest created"); }
 
-    std::shared_ptr<ECOSession> createSession(int32_t width, int32_t height,
-                                              bool isCameraRecording) {
+    sp<ECOSession> createSession(int32_t width, int32_t height, bool isCameraRecording) {
         mSession = ECOSession::createECOSession(width, height, isCameraRecording);
         if (mSession == nullptr) return nullptr;
         return mSession;
     }
 
 private:
-    std::shared_ptr<ECOSession> mSession = nullptr;
+    sp<ECOSession> mSession = nullptr;
 };
 
 TEST_F(EcoSessionTest, TestConstructorWithInvalidParameters) {
@@ -91,121 +91,106 @@ TEST_F(EcoSessionTest, TestConstructorWithValidParameters) {
 }
 
 TEST_F(EcoSessionTest, TestAddProviderWithoutSpecifyEcoDataType) {
-    std::shared_ptr<ECOSession> ecoSession =
-            createSession(kTestWidth, kTestHeight, kIsCameraRecording);
+    sp<ECOSession> ecoSession = createSession(kTestWidth, kTestHeight, kIsCameraRecording);
     EXPECT_TRUE(ecoSession);
 
-    std::shared_ptr<FakeECOServiceStatsProvider> fakeProvider =
-            ndk::SharedRefBase::make<FakeECOServiceStatsProvider>(
-                    kTestWidth, kTestHeight, kIsCameraRecording, kFrameRate, ecoSession);
+    sp<FakeECOServiceStatsProvider> fakeProvider = new FakeECOServiceStatsProvider(
+            kTestWidth, kTestHeight, kIsCameraRecording, kFrameRate, ecoSession);
 
     ECOData providerConfig;
     bool res;
-    ScopedAStatus status = ecoSession->addStatsProvider(fakeProvider, providerConfig, &res);
+    Status status = ecoSession->addStatsProvider(fakeProvider, providerConfig, &res);
     EXPECT_FALSE(status.isOk());
 }
 
 TEST_F(EcoSessionTest, TestAddProviderWithWrongEcoDataType) {
-    std::shared_ptr<ECOSession> ecoSession =
-            createSession(kTestWidth, kTestHeight, kIsCameraRecording);
+    sp<ECOSession> ecoSession = createSession(kTestWidth, kTestHeight, kIsCameraRecording);
     EXPECT_TRUE(ecoSession);
 
-    std::shared_ptr<FakeECOServiceStatsProvider> fakeProvider =
-            ndk::SharedRefBase::make<FakeECOServiceStatsProvider>(
-                    kTestWidth, kTestHeight, kIsCameraRecording, kFrameRate, ecoSession);
+    sp<FakeECOServiceStatsProvider> fakeProvider = new FakeECOServiceStatsProvider(
+            kTestWidth, kTestHeight, kIsCameraRecording, kFrameRate, ecoSession);
 
     ECOData providerConfig(ECOData::DATA_TYPE_INFO_LISTENER_CONFIG,
                            systemTime(SYSTEM_TIME_BOOTTIME));
     bool res;
-    ScopedAStatus status = ecoSession->addStatsProvider(fakeProvider, providerConfig, &res);
+    Status status = ecoSession->addStatsProvider(fakeProvider, providerConfig, &res);
     EXPECT_FALSE(status.isOk());
 }
 
 TEST_F(EcoSessionTest, TestAddNormalProvider) {
-    std::shared_ptr<ECOSession> ecoSession =
-            createSession(kTestWidth, kTestHeight, kIsCameraRecording);
+    sp<ECOSession> ecoSession = createSession(kTestWidth, kTestHeight, kIsCameraRecording);
     EXPECT_TRUE(ecoSession);
 
-    std::shared_ptr<FakeECOServiceStatsProvider> fakeProvider =
-            ndk::SharedRefBase::make<FakeECOServiceStatsProvider>(
-                    kTestWidth, kTestHeight, kIsCameraRecording, kFrameRate, ecoSession);
+    sp<FakeECOServiceStatsProvider> fakeProvider = new FakeECOServiceStatsProvider(
+            kTestWidth, kTestHeight, kIsCameraRecording, kFrameRate, ecoSession);
 
     ECOData providerConfig(ECOData::DATA_TYPE_STATS_PROVIDER_CONFIG,
                            systemTime(SYSTEM_TIME_BOOTTIME));
     bool res;
-    ScopedAStatus status = ecoSession->addStatsProvider(fakeProvider, providerConfig, &res);
+    Status status = ecoSession->addStatsProvider(fakeProvider, providerConfig, &res);
     EXPECT_TRUE(status.isOk());
 }
 
 // Add two providers and expect failure as ECOService1.0 only supports one provider and one
 // listener.
 TEST_F(EcoSessionTest, TestAddTwoProvider) {
-    std::shared_ptr<ECOSession> ecoSession =
-            createSession(kTestWidth, kTestHeight, kIsCameraRecording);
+    sp<ECOSession> ecoSession = createSession(kTestWidth, kTestHeight, kIsCameraRecording);
     EXPECT_TRUE(ecoSession);
 
-    std::shared_ptr<FakeECOServiceStatsProvider> fakeProvider1 =
-            ndk::SharedRefBase::make<FakeECOServiceStatsProvider>(
-                    kTestWidth, kTestHeight, kIsCameraRecording, kFrameRate, ecoSession);
+    sp<FakeECOServiceStatsProvider> fakeProvider1 = new FakeECOServiceStatsProvider(
+            kTestWidth, kTestHeight, kIsCameraRecording, kFrameRate, ecoSession);
 
     ECOData providerConfig(ECOData::DATA_TYPE_STATS_PROVIDER_CONFIG,
                            systemTime(SYSTEM_TIME_BOOTTIME));
     bool res;
-    ScopedAStatus status = ecoSession->addStatsProvider(fakeProvider1, providerConfig, &res);
+    Status status = ecoSession->addStatsProvider(fakeProvider1, providerConfig, &res);
     EXPECT_TRUE(status.isOk());
 
-    std::shared_ptr<FakeECOServiceStatsProvider> fakeProvider2 =
-            ndk::SharedRefBase::make<FakeECOServiceStatsProvider>(
-                    kTestWidth, kTestHeight, kIsCameraRecording, kFrameRate, ecoSession);
+    sp<FakeECOServiceStatsProvider> fakeProvider2 = new FakeECOServiceStatsProvider(
+            kTestWidth, kTestHeight, kIsCameraRecording, kFrameRate, ecoSession);
     status = ecoSession->addStatsProvider(fakeProvider2, providerConfig, &res);
     EXPECT_FALSE(status.isOk());
 }
 
 TEST_F(EcoSessionTest, TestAddListenerWithDifferentHeight) {
-    std::shared_ptr<ECOSession> ecoSession =
-            createSession(kTestWidth, kTestHeight, kIsCameraRecording);
+    sp<ECOSession> ecoSession = createSession(kTestWidth, kTestHeight, kIsCameraRecording);
     EXPECT_TRUE(ecoSession);
 
-    std::shared_ptr<FakeECOServiceInfoListener> fakeListener =
-            ndk::SharedRefBase::make<FakeECOServiceInfoListener>(kTestWidth - 1, kTestHeight,
-                                                                 kIsCameraRecording, ecoSession);
+    sp<FakeECOServiceInfoListener> fakeListener = new FakeECOServiceInfoListener(
+            kTestWidth - 1, kTestHeight, kIsCameraRecording, ecoSession);
 
     ECOData ListenerConfig(ECOData::DATA_TYPE_INFO_LISTENER_CONFIG,
                            systemTime(SYSTEM_TIME_BOOTTIME));
     bool res;
-    ScopedAStatus status = ecoSession->addInfoListener(fakeListener, ListenerConfig, &res);
+    Status status = ecoSession->addInfoListener(fakeListener, ListenerConfig, &res);
     EXPECT_FALSE(status.isOk());
 }
 
 TEST_F(EcoSessionTest, TestAddListenerWithDifferentWidth) {
-    std::shared_ptr<ECOSession> ecoSession =
-            createSession(kTestWidth, kTestHeight, kIsCameraRecording);
+    sp<ECOSession> ecoSession = createSession(kTestWidth, kTestHeight, kIsCameraRecording);
     EXPECT_TRUE(ecoSession);
 
-    std::shared_ptr<FakeECOServiceInfoListener> fakeListener =
-            ndk::SharedRefBase::make<FakeECOServiceInfoListener>(kTestWidth, kTestHeight - 1,
-                                                                 kIsCameraRecording, ecoSession);
+    sp<FakeECOServiceInfoListener> fakeListener = new FakeECOServiceInfoListener(
+            kTestWidth, kTestHeight - 1, kIsCameraRecording, ecoSession);
 
     ECOData ListenerConfig(ECOData::DATA_TYPE_INFO_LISTENER_CONFIG,
                            systemTime(SYSTEM_TIME_BOOTTIME));
     bool res;
-    ScopedAStatus status = ecoSession->addInfoListener(fakeListener, ListenerConfig, &res);
+    Status status = ecoSession->addInfoListener(fakeListener, ListenerConfig, &res);
     EXPECT_FALSE(status.isOk());
 }
 
 TEST_F(EcoSessionTest, TestAddListenerWithCameraRecordingFalse) {
-    std::shared_ptr<ECOSession> ecoSession =
-            createSession(kTestWidth, kTestHeight, kIsCameraRecording);
+    sp<ECOSession> ecoSession = createSession(kTestWidth, kTestHeight, kIsCameraRecording);
     EXPECT_TRUE(ecoSession);
 
-    std::shared_ptr<FakeECOServiceInfoListener> fakeListener =
-            ndk::SharedRefBase::make<FakeECOServiceInfoListener>(kTestWidth, kTestHeight,
-                                                                 !kIsCameraRecording, ecoSession);
+    sp<FakeECOServiceInfoListener> fakeListener = new FakeECOServiceInfoListener(
+            kTestWidth, kTestHeight, !kIsCameraRecording, ecoSession);
 
     ECOData ListenerConfig(ECOData::DATA_TYPE_INFO_LISTENER_CONFIG,
                            systemTime(SYSTEM_TIME_BOOTTIME));
     bool res;
-    ScopedAStatus status = ecoSession->addInfoListener(fakeListener, ListenerConfig, &res);
+    Status status = ecoSession->addInfoListener(fakeListener, ListenerConfig, &res);
     EXPECT_FALSE(status.isOk());
 }
 
@@ -217,25 +202,22 @@ TEST_F(EcoSessionTest, TestSessionWithProviderAndListenerSimpleTest) {
     static constexpr int kServiceWaitTimeMs = 10;
 
     // Create the session.
-    std::shared_ptr<ECOSession> ecoSession =
-            createSession(kTestWidth, kTestHeight, kIsCameraRecording);
+    sp<ECOSession> ecoSession = createSession(kTestWidth, kTestHeight, kIsCameraRecording);
 
     // Add provider.
-    std::shared_ptr<FakeECOServiceStatsProvider> fakeProvider =
-            ndk::SharedRefBase::make<FakeECOServiceStatsProvider>(
-                    kTestWidth, kTestHeight, kIsCameraRecording, kFrameRate, ecoSession);
+    sp<FakeECOServiceStatsProvider> fakeProvider = new FakeECOServiceStatsProvider(
+            kTestWidth, kTestHeight, kIsCameraRecording, kFrameRate, ecoSession);
     ECOData providerConfig(ECOData::DATA_TYPE_STATS_PROVIDER_CONFIG,
                            systemTime(SYSTEM_TIME_BOOTTIME));
     providerConfig.setString(KEY_PROVIDER_NAME, "FakeECOServiceStatsProvider");
     providerConfig.setInt32(KEY_PROVIDER_TYPE,
                             ECOServiceStatsProvider::STATS_PROVIDER_TYPE_VIDEO_ENCODER);
     bool res;
-    ScopedAStatus status = ecoSession->addStatsProvider(fakeProvider, providerConfig, &res);
+    Status status = ecoSession->addStatsProvider(fakeProvider, providerConfig, &res);
 
     // Create listener.
-    std::shared_ptr<FakeECOServiceInfoListener> fakeListener =
-            ndk::SharedRefBase::make<FakeECOServiceInfoListener>(kTestWidth, kTestHeight,
-                                                                 kIsCameraRecording, ecoSession);
+    sp<FakeECOServiceInfoListener> fakeListener =
+            new FakeECOServiceInfoListener(kTestWidth, kTestHeight, kIsCameraRecording, ecoSession);
 
     // Create the listener config.
     ECOData listenerConfig(ECOData::DATA_TYPE_INFO_LISTENER_CONFIG,
@@ -428,18 +410,16 @@ TEST_F(EcoSessionTest, TestSessionWithProviderAndListenerSimpleTest) {
 }
 
 TEST_F(EcoSessionTest, TestRemoveMatchProvider) {
-    std::shared_ptr<ECOSession> ecoSession =
-            createSession(kTestWidth, kTestHeight, kIsCameraRecording);
+    sp<ECOSession> ecoSession = createSession(kTestWidth, kTestHeight, kIsCameraRecording);
     EXPECT_TRUE(ecoSession);
 
-    std::shared_ptr<FakeECOServiceStatsProvider> fakeProvider1 =
-            ndk::SharedRefBase::make<FakeECOServiceStatsProvider>(
-                    kTestWidth, kTestHeight, kIsCameraRecording, kFrameRate, ecoSession);
+    sp<FakeECOServiceStatsProvider> fakeProvider1 = new FakeECOServiceStatsProvider(
+            kTestWidth, kTestHeight, kIsCameraRecording, kFrameRate, ecoSession);
 
     ECOData providerConfig(ECOData::DATA_TYPE_STATS_PROVIDER_CONFIG,
                            systemTime(SYSTEM_TIME_BOOTTIME));
     bool res;
-    ScopedAStatus status = ecoSession->addStatsProvider(fakeProvider1, providerConfig, &res);
+    Status status = ecoSession->addStatsProvider(fakeProvider1, providerConfig, &res);
     EXPECT_TRUE(res);
     EXPECT_TRUE(status.isOk());
 
@@ -449,24 +429,21 @@ TEST_F(EcoSessionTest, TestRemoveMatchProvider) {
 }
 
 TEST_F(EcoSessionTest, TestRemoveMisMatchProvider) {
-    std::shared_ptr<ECOSession> ecoSession =
-            createSession(kTestWidth, kTestHeight, kIsCameraRecording);
+    sp<ECOSession> ecoSession = createSession(kTestWidth, kTestHeight, kIsCameraRecording);
     EXPECT_TRUE(ecoSession);
 
-    std::shared_ptr<FakeECOServiceStatsProvider> fakeProvider1 =
-            ndk::SharedRefBase::make<FakeECOServiceStatsProvider>(
-                    kTestWidth, kTestHeight, kIsCameraRecording, kFrameRate, ecoSession);
+    sp<FakeECOServiceStatsProvider> fakeProvider1 = new FakeECOServiceStatsProvider(
+            kTestWidth, kTestHeight, kIsCameraRecording, kFrameRate, ecoSession);
 
     ECOData providerConfig(ECOData::DATA_TYPE_STATS_PROVIDER_CONFIG,
                            systemTime(SYSTEM_TIME_BOOTTIME));
     bool res;
-    ScopedAStatus status = ecoSession->addStatsProvider(fakeProvider1, providerConfig, &res);
+    Status status = ecoSession->addStatsProvider(fakeProvider1, providerConfig, &res);
     EXPECT_TRUE(res);
     EXPECT_TRUE(status.isOk());
 
-    std::shared_ptr<FakeECOServiceStatsProvider> fakeProvider2 =
-            ndk::SharedRefBase::make<FakeECOServiceStatsProvider>(
-                    kTestWidth, kTestHeight, kIsCameraRecording, kFrameRate, ecoSession);
+    sp<FakeECOServiceStatsProvider> fakeProvider2 = new FakeECOServiceStatsProvider(
+            kTestWidth, kTestHeight, kIsCameraRecording, kFrameRate, ecoSession);
 
     status = ecoSession->removeStatsProvider(fakeProvider2, &res);
     EXPECT_FALSE(res);
@@ -474,14 +451,12 @@ TEST_F(EcoSessionTest, TestRemoveMisMatchProvider) {
 }
 
 TEST_F(EcoSessionTest, TestRemoveMatchListener) {
-    std::shared_ptr<ECOSession> ecoSession =
-            createSession(kTestWidth, kTestHeight, kIsCameraRecording);
+    sp<ECOSession> ecoSession = createSession(kTestWidth, kTestHeight, kIsCameraRecording);
     EXPECT_TRUE(ecoSession);
 
     // Create listener.
-    std::shared_ptr<FakeECOServiceInfoListener> fakeListener =
-            ndk::SharedRefBase::make<FakeECOServiceInfoListener>(kTestWidth, kTestHeight,
-                                                                 kIsCameraRecording, ecoSession);
+    sp<FakeECOServiceInfoListener> fakeListener =
+            new FakeECOServiceInfoListener(kTestWidth, kTestHeight, kIsCameraRecording, ecoSession);
 
     // Create the listener config.
     ECOData listenerConfig(ECOData::DATA_TYPE_INFO_LISTENER_CONFIG,
@@ -494,7 +469,7 @@ TEST_F(EcoSessionTest, TestRemoveMatchListener) {
     listenerConfig.setInt32(KEY_LISTENER_QP_CHANGE_THRESHOLD, 5);
 
     bool res;
-    ScopedAStatus status = ecoSession->addInfoListener(fakeListener, listenerConfig, &res);
+    Status status = ecoSession->addInfoListener(fakeListener, listenerConfig, &res);
 
     status = ecoSession->removeInfoListener(fakeListener, &res);
     EXPECT_TRUE(res);
@@ -502,14 +477,12 @@ TEST_F(EcoSessionTest, TestRemoveMatchListener) {
 }
 
 TEST_F(EcoSessionTest, TestRemoveMisMatchListener) {
-    std::shared_ptr<ECOSession> ecoSession =
-            createSession(kTestWidth, kTestHeight, kIsCameraRecording);
+    sp<ECOSession> ecoSession = createSession(kTestWidth, kTestHeight, kIsCameraRecording);
     EXPECT_TRUE(ecoSession);
 
     // Create listener.
-    std::shared_ptr<FakeECOServiceInfoListener> fakeListener =
-            ndk::SharedRefBase::make<FakeECOServiceInfoListener>(kTestWidth, kTestHeight,
-                                                                 kIsCameraRecording, ecoSession);
+    sp<FakeECOServiceInfoListener> fakeListener =
+            new FakeECOServiceInfoListener(kTestWidth, kTestHeight, kIsCameraRecording, ecoSession);
 
     // Create the listener config.
     ECOData listenerConfig(ECOData::DATA_TYPE_INFO_LISTENER_CONFIG,
@@ -522,12 +495,11 @@ TEST_F(EcoSessionTest, TestRemoveMisMatchListener) {
     listenerConfig.setInt32(KEY_LISTENER_QP_CHANGE_THRESHOLD, 5);
 
     bool res;
-    ScopedAStatus status = ecoSession->addInfoListener(fakeListener, listenerConfig, &res);
+    Status status = ecoSession->addInfoListener(fakeListener, listenerConfig, &res);
 
     // Create listener.
-    std::shared_ptr<FakeECOServiceInfoListener> fakeListener2 =
-            ndk::SharedRefBase::make<FakeECOServiceInfoListener>(kTestWidth, kTestHeight,
-                                                                 kIsCameraRecording, ecoSession);
+    sp<FakeECOServiceInfoListener> fakeListener2 =
+            new FakeECOServiceInfoListener(kTestWidth, kTestHeight, kIsCameraRecording, ecoSession);
 
     status = ecoSession->removeInfoListener(fakeListener2, &res);
     EXPECT_FALSE(res);
@@ -541,20 +513,18 @@ TEST_F(EcoSessionTest, TestAddListenerAferProviderStarts) {
     static constexpr int kServiceWaitTimeMs = 10;
 
     // Create the session.
-    std::shared_ptr<ECOSession> ecoSession =
-            createSession(kTestWidth, kTestHeight, kIsCameraRecording);
+    sp<ECOSession> ecoSession = createSession(kTestWidth, kTestHeight, kIsCameraRecording);
 
     // Add provider.
-    std::shared_ptr<FakeECOServiceStatsProvider> fakeProvider =
-            ndk::SharedRefBase::make<FakeECOServiceStatsProvider>(
-                    kTestWidth, kTestHeight, kIsCameraRecording, kFrameRate, ecoSession);
+    sp<FakeECOServiceStatsProvider> fakeProvider = new FakeECOServiceStatsProvider(
+            kTestWidth, kTestHeight, kIsCameraRecording, kFrameRate, ecoSession);
     ECOData providerConfig(ECOData::DATA_TYPE_STATS_PROVIDER_CONFIG,
                            systemTime(SYSTEM_TIME_BOOTTIME));
     providerConfig.setString(KEY_PROVIDER_NAME, "FakeECOServiceStatsProvider");
     providerConfig.setInt32(KEY_PROVIDER_TYPE,
                             ECOServiceStatsProvider::STATS_PROVIDER_TYPE_VIDEO_ENCODER);
     bool res;
-    ScopedAStatus status = ecoSession->addStatsProvider(fakeProvider, providerConfig, &res);
+    Status status = ecoSession->addStatsProvider(fakeProvider, providerConfig, &res);
 
     // Inject the session stats into the ECOSession through fakeProvider.
     SimpleEncoderConfig sessionEncoderConfig("google-avc", CodecTypeAVC, AVCProfileHigh, AVCLevel52,
@@ -576,9 +546,8 @@ TEST_F(EcoSessionTest, TestAddListenerAferProviderStarts) {
     // =======================================================================================
     // Create and add the listener to the ECOSession. Expect to receive the session infor right
     // after addInfoListener.
-    std::shared_ptr<FakeECOServiceInfoListener> fakeListener =
-            ndk::SharedRefBase::make<FakeECOServiceInfoListener>(kTestWidth, kTestHeight,
-                                                                 kIsCameraRecording, ecoSession);
+    sp<FakeECOServiceInfoListener> fakeListener =
+            new FakeECOServiceInfoListener(kTestWidth, kTestHeight, kIsCameraRecording, ecoSession);
 
     // Create the listener config.
     ECOData listenerConfig(ECOData::DATA_TYPE_INFO_LISTENER_CONFIG,

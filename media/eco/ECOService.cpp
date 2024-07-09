@@ -42,9 +42,9 @@ ECOService::ECOService() : BnECOService() {
     updateLogLevel();
 }
 
-/*virtual*/ ::ndk::ScopedAStatus ECOService::obtainSession(
+/*virtual*/ ::android::binder::Status ECOService::obtainSession(
         int32_t width, int32_t height, bool isCameraRecording,
-        std::shared_ptr<::android::media::eco::IECOSession>* _aidl_return) {
+        ::android::sp<::android::media::eco::IECOSession>* _aidl_return) {
     ECOLOGI("ECOService::obtainSession w: %d, h: %d, isCameraRecording: %d", width, height,
             isCameraRecording);
 
@@ -72,19 +72,18 @@ ECOService::ECOService() : BnECOService() {
     // invalid sessions.
     SanitizeSession([&](MapIterType iter) {
         if (iter->first == newCfg) {
-            std::shared_ptr<ECOSession> session = iter->second.lock();
+            sp<ECOSession> session = iter->second.promote();
             foundSession = true;
             *_aidl_return = session;
         }
     });
 
     if (foundSession) {
-        return ndk::ScopedAStatus::ok();
+        return binder::Status::ok();
     }
 
     // Create a new session and add it to the record.
-    std::shared_ptr<ECOSession> newSession =
-            ECOSession::createECOSession(width, height, isCameraRecording);
+    sp<ECOSession> newSession = ECOSession::createECOSession(width, height, isCameraRecording);
     if (newSession == nullptr) {
         ECOLOGE("ECOService failed to create ECOSession w: %d, h: %d, isCameraRecording: %d", width,
                 height, isCameraRecording);
@@ -95,36 +94,36 @@ ECOService::ECOService() : BnECOService() {
     mSessionConfigToSessionMap[newCfg] = newSession;
     ECOLOGD("session count after is %zu", mSessionConfigToSessionMap.size());
 
-    return ndk::ScopedAStatus::ok();
+    return binder::Status::ok();
 }
 
-/*virtual*/ ::ndk::ScopedAStatus ECOService::getNumOfSessions(int32_t* _aidl_return) {
+/*virtual*/ ::android::binder::Status ECOService::getNumOfSessions(int32_t* _aidl_return) {
     Mutex::Autolock lock(mServiceLock);
     SanitizeSession(std::function<void(MapIterType it)>());  // empty callback
     *_aidl_return = mSessionConfigToSessionMap.size();
-    return ndk::ScopedAStatus::ok();
+    return binder::Status::ok();
 }
 
-/*virtual*/ ::ndk::ScopedAStatus ECOService::getSessions(
-        std::vector<::ndk::SpAIBinder>* _aidl_return) {
+/*virtual*/ ::android::binder::Status ECOService::getSessions(
+        ::std::vector<::android::sp<::android::IBinder>>* _aidl_return) {
     // Clear all the entries in the vector.
     _aidl_return->clear();
 
     Mutex::Autolock lock(mServiceLock);
     SanitizeSession([&](MapIterType iter) {
-        std::shared_ptr<ECOSession> session = iter->second.lock();
-        _aidl_return->push_back(session->asBinder());
+        sp<ECOSession> session = iter->second.promote();
+        _aidl_return->push_back(IInterface::asBinder(session));
     });
-    return ndk::ScopedAStatus::ok();
+    return binder::Status::ok();
 }
 
-inline bool isEmptySession(const std::weak_ptr<ECOSession>& entry) {
-    std::shared_ptr<ECOSession> session = entry.lock();
+inline bool isEmptySession(const android::wp<ECOSession>& entry) {
+    sp<ECOSession> session = entry.promote();
     return session == nullptr;
 }
 
 void ECOService::SanitizeSession(
-        const std::function<void(std::unordered_map<SessionConfig, std::weak_ptr<ECOSession>,
+        const std::function<void(std::unordered_map<SessionConfig, wp<ECOSession>,
                                                     SessionConfigHash>::iterator it)>& callback) {
     for (auto it = mSessionConfigToSessionMap.begin(), end = mSessionConfigToSessionMap.end();
          it != end;) {
@@ -139,15 +138,15 @@ void ECOService::SanitizeSession(
     }
 }
 
-/*virtual*/ void ECOService::binderDied(const std::weak_ptr<AIBinder>& /*who*/) {}
+/*virtual*/ void ECOService::binderDied(const wp<IBinder>& /*who*/) {}
 
-status_t ECOService::dump(int fd, const std::vector<std::string>& args) {
+status_t ECOService::dump(int fd, const Vector<String16>& args) {
     Mutex::Autolock lock(mServiceLock);
     dprintf(fd, "\n== ECO Service info: ==\n\n");
     dprintf(fd, "Number of ECOServices: %zu\n", mSessionConfigToSessionMap.size());
     for (auto it = mSessionConfigToSessionMap.begin(), end = mSessionConfigToSessionMap.end();
          it != end; it++) {
-        std::shared_ptr<ECOSession> session = std::shared_ptr<ECOSession>(it->second);
+        sp<ECOSession> session = it->second.promote();
         if (session != nullptr) {
             session->dump(fd, args);
         }

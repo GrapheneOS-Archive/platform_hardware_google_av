@@ -20,7 +20,8 @@
 #include "FakeECOServiceInfoListener.h"
 
 #include <android-base/unique_fd.h>
-#include <android/binder_parcel.h>
+#include <binder/Parcel.h>
+#include <binder/Parcelable.h>
 #include <cutils/ashmem.h>
 #include <gtest/gtest.h>
 #include <math.h>
@@ -34,7 +35,7 @@ namespace eco {
 
 FakeECOServiceInfoListener::FakeECOServiceInfoListener(int32_t width, int32_t height,
                                                        bool isCameraRecording,
-                                                       std::shared_ptr<IECOSession> session)
+                                                       android::sp<IECOSession> session)
       : mWidth(width),
         mHeight(height),
         mIsCameraRecording(isCameraRecording),
@@ -54,29 +55,28 @@ FakeECOServiceInfoListener::~FakeECOServiceInfoListener() {
     ALOGD("FakeECOServiceInfoListener destructor");
 }
 
-ndk::ScopedAStatus FakeECOServiceInfoListener::getType(int32_t* /*_aidl_return*/) {
-    return ndk::ScopedAStatus::ok();
+Status FakeECOServiceInfoListener::getType(int32_t* /*_aidl_return*/) {
+    return binder::Status::ok();
 }
 
-ndk::ScopedAStatus FakeECOServiceInfoListener::getName(std::string* _aidl_return) {
-    *_aidl_return = std::string("FakeECOServiceInfoListener");
-    return ndk::ScopedAStatus::ok();
+Status FakeECOServiceInfoListener::getName(::android::String16* _aidl_return) {
+    *_aidl_return = String16("FakeECOServiceInfoListener");
+    return binder::Status::ok();
 }
 
-ndk::ScopedAStatus FakeECOServiceInfoListener::getECOSession(::ndk::SpAIBinder* _aidl_return) {
-    *_aidl_return = mECOSession->asBinder();
-    return ndk::ScopedAStatus::ok();
+Status FakeECOServiceInfoListener::getECOSession(sp<::android::IBinder>* _aidl_return) {
+    *_aidl_return = IInterface::asBinder(mECOSession);
+    return binder::Status::ok();
 }
 
-ndk::ScopedAStatus FakeECOServiceInfoListener::onNewInfo(
-        const ::android::media::eco::ECOData& newInfo) {
+Status FakeECOServiceInfoListener::onNewInfo(const ::android::media::eco::ECOData& newInfo) {
     ALOGD("FakeECOServiceInfoListener get new info");
     mInfoAvaiableCallback(newInfo);
-    return ndk::ScopedAStatus::ok();
+    return binder::Status::ok();
 }
 
 // IBinder::DeathRecipient implementation
-void FakeECOServiceInfoListener::binderDied(const std::weak_ptr<AIBinder>& /*who*/) {}
+void FakeECOServiceInfoListener::binderDied(const wp<IBinder>& /*who*/) {}
 
 }  // namespace eco
 }  // namespace media

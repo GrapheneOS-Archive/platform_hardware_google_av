@@ -50,6 +50,12 @@ ECOData SimpleEncodedFrameData::toEcoData(ECOData::ECODatatype dataType) {
     return data;
 }
 
+bool copyKeyValue(const ECOData& src, ECOData* dst) {
+    if (src.isEmpty() || dst == nullptr) return false;
+    dst->mKeyValueStore = src.mKeyValueStore;
+    return true;
+}
+
 }  // namespace eco
 }  // namespace media
 }  // namespace android

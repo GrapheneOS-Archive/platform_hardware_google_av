@@ -17,8 +17,8 @@
 #ifndef ANDROID_MEDIA_ECO_SERVICE_INFO_LISTENER_H_
 #define ANDROID_MEDIA_ECO_SERVICE_INFO_LISTENER_H_
 
-#include <aidl/android/media/eco/BnECOServiceInfoListener.h>
-#include <aidl/android/media/eco/IECOSession.h>
+#include <android/media/eco/BnECOServiceInfoListener.h>
+#include <android/media/eco/IECOSession.h>
 
 #include <condition_variable>
 #include <memory>
@@ -31,28 +31,27 @@ namespace android {
 namespace media {
 namespace eco {
 
-using aidl::android::media::eco::BnECOServiceInfoListener;
-using aidl::android::media::eco::ECOData;
-using aidl::android::media::eco::ECODataStatus;
-using ::ndk::ScopedAStatus;
+using ::android::binder::Status;
 
 /**
  * ECOServiceInfoListener interface class.
  */
-class ECOServiceInfoListener : public BnECOServiceInfoListener {
+class ECOServiceInfoListener : public BnECOServiceInfoListener,
+                               public virtual IBinder::DeathRecipient {
+
 public:
     // Create a ECOServiceInfoListener with specifed width, height and isCameraRecording.
     ECOServiceInfoListener(int32_t width, int32_t height, bool isCameraRecording);
 
     virtual ~ECOServiceInfoListener() {}
 
-    virtual ScopedAStatus getType(int32_t* _aidl_return) = 0;
-    virtual ScopedAStatus getName(std::string* _aidl_return) = 0;
-    virtual ScopedAStatus getECOSession(::ndk::SpAIBinder* _aidl_return) = 0;
-    virtual ScopedAStatus onNewInfo(const ::android::media::eco::ECOData& newInfo) = 0;
+    virtual Status getType(int32_t* _aidl_return) = 0;
+    virtual Status getName(::android::String16* _aidl_return) = 0;
+    virtual Status getECOSession(::android::sp<::android::IBinder>* _aidl_return) = 0;
+    virtual Status onNewInfo(const ::android::media::eco::ECOData& newInfo) = 0;
 
     // IBinder::DeathRecipient implementation.
-    virtual void binderDied(const std::weak_ptr<AIBinder>& who);
+    virtual void binderDied(const wp<IBinder>& who);
 
 private:
 };

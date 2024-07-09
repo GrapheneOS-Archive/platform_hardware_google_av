@@ -28,8 +28,6 @@
 namespace android {
 namespace media {
 namespace eco {
-using aidl::android::media::eco::ECOData;
-using aidl::android::media::eco::ECODataStatus;
 
 #define RETURN_STATUS_IF_ERROR(expr)  \
     {                                 \
@@ -122,6 +120,8 @@ struct SimpleEncodedFrameData {
     // Convert this SimpleEncoderConfig to ECOData with dataType.
     ECOData toEcoData(ECOData::ECODatatype dataType);
 };
+
+bool copyKeyValue(const ECOData& src, ECOData* dst);
 
 }  // namespace eco
 }  // namespace media

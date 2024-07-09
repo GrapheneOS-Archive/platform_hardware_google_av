@@ -20,8 +20,8 @@
 #define LOG_TAG "ECODataTest"
 
 #include <android-base/unique_fd.h>
-#include <android/binder_parcel.h>
-#include <android/binder_status.h>
+#include <binder/Parcel.h>
+#include <binder/Parcelable.h>
 #include <cutils/ashmem.h>
 #include <gtest/gtest.h>
 #include <math.h>
@@ -35,8 +35,6 @@
 namespace android {
 namespace media {
 namespace eco {
-using aidl::android::media::eco::ECOData;
-using aidl::android::media::eco::ECODataStatus;
 
 TEST(EcoDataTest, TestConstructor1) {
     std::unique_ptr<ECOData> data = std::make_unique<ECOData>();
@@ -304,16 +302,16 @@ TEST(EcoDataTest, TestNormalWriteReadParcel) {
         sourceData->set(it->first, it->second);
     }
 
-    AParcel* parcel = AParcel_create();
-    EXPECT_TRUE(sourceData->writeToParcel(parcel) == STATUS_OK);
+    std::unique_ptr<Parcel> parcel = std::make_unique<Parcel>();
+    EXPECT_TRUE(sourceData->writeToParcel(parcel.get()) == NO_ERROR);
 
     // Rewind the data position of the parcel for this test. Otherwise, the following read will not
     // start from the beginning.
-    AParcel_setDataPosition(parcel, 0);
+    parcel->setDataPosition(0);
 
     // Reads the parcel back into a new ECOData
     std::unique_ptr<ECOData> dstData = std::make_unique<ECOData>();
-    EXPECT_TRUE(dstData->readFromParcel(parcel) == STATUS_OK);
+    EXPECT_TRUE(dstData->readFromParcel(parcel.get()) == NO_ERROR);
 
     // Checks the data type, time and number of entries.
     EXPECT_EQ(sourceData->getNumOfEntries(), dstData->getNumOfEntries());
@@ -333,7 +331,8 @@ TEST(EcoDataTest, TestWriteInvalidParcel) {
 
     std::unique_ptr<ECOData> sourceData = std::make_unique<ECOData>(kDataType, kDataTimeUs);
 
-    EXPECT_TRUE(sourceData->writeToParcel(nullptr) != STATUS_OK);
+    std::unique_ptr<Parcel> parcel = std::make_unique<Parcel>();
+    EXPECT_TRUE(sourceData->writeToParcel(nullptr) != NO_ERROR);
 }
 
 TEST(EcoDataTest, TestReadInvalidParcel) {
@@ -349,19 +348,18 @@ TEST(EcoDataTest, TestReadInvalidParcel) {
         sourceData->set(it->first, it->second);
     }
 
-    AParcel* parcel = AParcel_create();
-    EXPECT_TRUE(sourceData->writeToParcel(parcel) == STATUS_OK);
+    std::unique_ptr<Parcel> parcel = std::make_unique<Parcel>();
+    EXPECT_TRUE(sourceData->writeToParcel(parcel.get()) == NO_ERROR);
 
     // Corrupt the parcel by write random data to the beginning.
-    AParcel_setDataPosition(parcel, 4);
-    char* invalid_string = (char*)"invalid-data";
-    AParcel_writeString(parcel, invalid_string, strlen(invalid_string));
+    parcel->setDataPosition(4);
+    parcel->writeCString("invalid-data");
 
-    AParcel_setDataPosition(parcel, 0);
+    parcel->setDataPosition(0);
 
     // Reads the parcel back into a new ECOData
     std::unique_ptr<ECOData> dstData = std::make_unique<ECOData>();
-    EXPECT_TRUE(dstData->readFromParcel(parcel) != STATUS_OK);
+    EXPECT_TRUE(dstData->readFromParcel(parcel.get()) != NO_ERROR);
 }
 
 }  // namespace eco
